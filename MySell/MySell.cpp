@@ -295,44 +295,44 @@ void MySell::Compress_Text()
 
 		// 把区段往前移动
 
-		// 1.计算压缩后文件对齐的大小
-		DWORD Distance=Alignment(OutLength, m_pNT->OptionalHeader.FileAlignment);
+		//// 1.计算压缩后文件对齐的大小
+		//DWORD Distance=Alignment(OutLength, m_pNT->OptionalHeader.FileAlignment);
 
-		// 1.获取第1个区段首地址
-		PIMAGE_SECTION_HEADER pSection = IMAGE_FIRST_SECTION(m_pNT);
+		//// 1.获取第1个区段首地址
+		//PIMAGE_SECTION_HEADER pSection = IMAGE_FIRST_SECTION(m_pNT);
 
-		// 2.获取区段个数
-		int SecNuber=m_pNT->FileHeader.NumberOfSections;
+		//// 2.获取区段个数
+		//int SecNuber=m_pNT->FileHeader.NumberOfSections;
 
-		char* Source = m_pFile + pSection[0].PointerToRawData + Distance;
-		char* Target = NULL;
+		//char* Source = m_pFile + pSection[0].PointerToRawData + Distance;
+		//char* Target = NULL;
 
-		for(int i=1;i< SecNuber;i++)
-		{
-			// 1.先获取要移动到哪里 
-			
-			Target = m_pFile + pSection[i].PointerToRawData;
+		//for(int i=1;i< SecNuber;i++)
+		//{
+		//	// 1.先获取要移动到哪里 
+		//	
+		//	Target = m_pFile + pSection[i].PointerToRawData;
 
-			// 2.计算要移动多大
-			DWORD Target_Size = pSection[i].SizeOfRawData;
+		//	// 2.计算要移动多大
+		//	DWORD Target_Size = pSection[i].SizeOfRawData;
 
-			// 4.申请一段堆空间保存要移动的数据
-			char* Temp_Buff = (char*)malloc(sizeof(char) * Target_Size);
+		//	// 4.申请一段堆空间保存要移动的数据
+		//	char* Temp_Buff = (char*)malloc(sizeof(char) * Target_Size);
 
-			// 5.把数据拷贝到目标地址 
-			memcpy(Temp_Buff, Target, Target_Size);
-			memcpy(Source, Temp_Buff, Target_Size);
+		//	// 5.把数据拷贝到目标地址 
+		//	memcpy(Temp_Buff, Target, Target_Size);
+		//	memcpy(Source, Temp_Buff, Target_Size);
 
-			// 6.释放空间
-			free(Temp_Buff);
+		//	// 6.释放空间
+		//	free(Temp_Buff);
 
-			// 7.修改文件偏移
-			pSection[i].PointerToRawData = (DWORD)Source;
+		//	// 7.修改文件偏移
+		//	pSection[i].PointerToRawData = (DWORD)Source;
 
-			// 7.计算下一个要移动到哪里 
-			Source = m_pFile+ pSection[i].PointerToRawData;
+		//	// 7.计算下一个要移动到哪里 
+		//	Source = m_pFile+ pSection[i].PointerToRawData;
 
-		}
+		//}
 
 	}
 

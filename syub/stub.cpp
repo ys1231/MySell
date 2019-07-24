@@ -132,7 +132,7 @@ extern "C" {
 		size_t Text_Size = g_conf.compress_size;
 
 		// 计算原始大小
-		size_t Orig_Size = aPsafe_get_orig_size(Text);//求得原数据的大小
+		size_t Orig_Size = aPsafe_get_orig_size(Text);
 
 		// 申请内存空间保存解密后的数据
 		//char* data=NULL;
@@ -170,12 +170,174 @@ extern "C" {
 		
 	}
 
+	// 弹密码框
+
+	//窗口回调函数
+	LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+	{
+		DEFAPI("Kernel32.dll", GetModuleHandleW);
+		DEFAPI("user32.dll", CreateWindowExW);
+		DEFAPI("user32.dll", PostQuitMessage);
+		DEFAPI("user32.dll", DefWindowProcW);
+		DEFAPI("user32.dll", GetWindowTextA);
+		DEFAPI("user32.dll", MessageBoxA);
+		DEFAPI("user32.dll", GetDlgItem);
+		DEFAPI("user32.dll", ShowWindow);
+		
+		//消息处理
+		switch (msg)
+		{
+			//窗口被创建
+		case WM_CREATE:
+		{   
+			// 创建接收密码框
+			My_CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT", NULL,
+				WS_CHILD | WS_VISIBLE | WS_BORDER,50, 20,120, 30,
+				hwnd,(HMENU)0x1001,NULL,NULL);
+
+			// 创建按钮
+			My_CreateWindowExW(0,L"button", L"确定", WS_CHILD | WS_VISIBLE,
+				70, 60,60, 20,hwnd,(HMENU)0x1002,NULL,NULL);
+
+			return 0;
+		}
+			// 响应标准控件消息
+		case WM_COMMAND:
+		{
+			// 控件ID
+			DWORD ID = LOWORD(wParam);
+
+			// 消息通知码
+			DWORD code = HIWORD(wParam);
+			
+			if (ID == 0x1002 && code == BN_CLICKED)
+			{
+				// 获取密码框句柄
+				HWND hEdit = My_GetDlgItem(hwnd, 0x1001);
+				
+				// 保存密码的
+				char buff[5]={};
+				char str[5] = { '1','5','p','b','\0' };
+				DWORD flag = 0;
+
+				// 从空间获取密码
+				My_GetWindowTextA(hEdit, buff, 5);
+
+				// 进行密码验证
+				__asm
+				{
+					pushad
+					mov ecx, 0x4
+					lea edi, str
+					lea esi, buff
+					cld
+					repe cmpsb
+					jnz No
+					mov flag, 1
+					jmp End
+				No :
+					mov flag, 0
+				End :
+					popad
+				}
+
+				if (flag)
+				{
+					// 密码正确关闭弹框
+					My_ShowWindow(hwnd, SW_HIDE);
+					My_PostQuitMessage(0);
+					return 0;
+				}
+				else
+				{
+					My_MessageBoxA(0, "密码错误!", 0, MB_OK);
+				}
+			}
+			break;
+		}
+		//窗口销毁
+		case WM_DESTROY:
+		{
+			// 直接结束进程
+			DEFAPI("kernel32.dll", ExitProcess);
+			My_ExitProcess(0);
+		}
+		}
+		//让Windows以默认的方式来处理没有处理的消息。	
+		return My_DefWindowProcW(hwnd, msg, wParam, lParam);
+	}
+
+	//弹出密码验证框
+	void UserCheck()
+	{
+		DEFAPI("Kernel32.dll", GetModuleHandleW);
+		DEFAPI("user32.dll", RegisterClassW);
+		DEFAPI("gdi32.dll", GetStockObject);
+		DEFAPI("user32.dll", CreateWindowExW);
+		DEFAPI("user32.dll", ShowWindow);
+		DEFAPI("user32.dll", UpdateWindow);
+		DEFAPI("user32.dll", GetMessageW);
+		DEFAPI("user32.dll", TranslateMessage);
+		DEFAPI("user32.dll", DispatchMessageW);
+
+
+		// 1.设计一个窗口类（为窗口类的各个字段赋值）
+		WNDCLASS wc;//定义一个窗口类
+		static TCHAR szClassName[] = TEXT("我是一个壳");//窗口类名
+
+		wc.style = CS_HREDRAW | CS_VREDRAW;//窗口类的风格（一般为这两个风格，表示窗口拉伸时重绘窗口）
+		wc.cbClsExtra = 0;//分派给窗口类的扩展的字节数（额外内存）
+		wc.cbWndExtra = 0;//分派给窗口实例的扩展的字节数（额外内存）
+		wc.hIcon = 0;//窗口图标
+		wc.hCursor = 0;//鼠标样式
+		wc.hbrBackground = (HBRUSH)My_GetStockObject(WHITE_BRUSH);//窗口背景画刷
+		wc.lpszMenuName = NULL;//窗口菜单
+		wc.hInstance = My_GetModuleHandleW(NULL);//当前窗口句柄
+		wc.lpfnWndProc = WndProc;//指向窗口过程的指针(重要!!必填)	
+		wc.lpszClassName = szClassName;//窗口类名（重要!!必填）
+
+		// 2.注册窗口
+		My_RegisterClassW(&wc);
+
+		// 3.创建窗口
+		HWND hwnd;//定义一个窗口句柄
+		hwnd = My_CreateWindowExW(
+			0,//窗口扩展风格
+			szClassName,//窗口类的名字
+			TEXT("密码"),//窗口标题
+			WS_OVERLAPPEDWINDOW,//窗口风格
+			400,//初始化时x轴的位置
+			400,//初始化时y轴的位置
+			240,//窗口宽度
+			150,//窗口高度
+			NULL,//父窗口句柄
+			NULL,//窗口菜单句柄
+			My_GetModuleHandleW(NULL),//当前窗口的句柄
+			NULL//为窗口附加补充信息
+		);
+
+		// 4.显示窗口、更新绘制窗口	
+		My_ShowWindow(hwnd, SW_SHOW);
+		My_UpdateWindow(hwnd);
+
+		// 5.消息循环
+		MSG msg;//定义一个消息
+		//GetMessage这个函数获取到WM_QUIT消息的时候，会返回false
+		while (My_GetMessageW(&msg, NULL, 0, 0))//NULL表示捕获所有窗口的消息，后面两个0表示捕获所有的消息
+		{
+			My_TranslateMessage(&msg);
+			My_DispatchMessageW(&msg);//分派消息到窗口过程
+		}
+	}
+
+
 	_declspec(dllexport)
 		void _declspec(naked) start() {
 
 		// 初始化两个重要函数的地址
 		getApis();
 
+		UserCheck();
 		// 解压缩
 		DeCompress();
 
