@@ -160,26 +160,26 @@ void MySell::Add_Section()
 	m_pNT->OptionalHeader.SizeOfImage = pNewSec->VirtualAddress + m_StubInfo.Text_Size;
 
 	// 9,修改文件数据大小 
-		// 1.先获取修改后的文件大小
-		int NewSize = pNewSec->PointerToRawData + pNewSec->SizeOfRawData;
 
-		// 2.扩大对空间 保证有那么大的文件
-		m_pFile = (char*)realloc(m_pFile, NewSize);
-		// 获取NT头
-		m_pDos = (PIMAGE_DOS_HEADER)m_pFile;
-		m_pNT = (PIMAGE_NT_HEADERS)(m_pDos->e_lfanew + m_pFile);
+	// 1.先获取修改后的文件大小
+	int NewSize = pNewSec->PointerToRawData + pNewSec->SizeOfRawData;
 
-		// 修改原文件保存的大小
-		m_Size = NewSize;
+	// 2.扩大对空间 保证有那么大的文件
+	m_pFile = (char*)realloc(m_pFile, NewSize);
+	// 获取NT头
+	m_pDos = (PIMAGE_DOS_HEADER)m_pFile;
+	m_pNT = (PIMAGE_NT_HEADERS)(m_pDos->e_lfanew + m_pFile);
 
-		printf("修改区段数据完成\n");
-		return;
+	// 修改原文件保存的大小
+	m_Size = NewSize;
+
+	printf("修改区段数据完成\n");
+	return;
 }
 
 
 void MySell::Alter_Other()
 {
-	
 
 	// 1.获取新区段首地址
 	PIMAGE_SECTION_HEADER p_Sec = Last_Section() + 1;
@@ -246,6 +246,9 @@ void MySell::Encryption_Text()
 	// 2.在文件偏移的位置开始加密 大小就是实际大小
 	unsigned char* Sec_Text = Scn_by_name(m_pFile, ".text")->PointerToRawData + (unsigned char*)m_pFile;
 
+	// 把文件偏移保存一下压缩的时候要使用
+	m_Text = Sec_Text;
+
 	// 2.1 开始加密
 	for(int i=0;i< m_StubInfo.g_Conf->encrypt_size;i++)
 	{
@@ -258,34 +261,82 @@ void MySell::Encryption_Text()
 
 void MySell::Compress_Text()
 {
-	// 1.先获取区段大小
-	int length = m_StubInfo.g_Conf->encrypt_size;
+	// 1.区段的大小
+	int Length = m_StubInfo.g_Conf->encrypt_size;
 
-	// 2.分配内存空间
-	char* workmem = (char*)malloc(aP_workmem_size(length));
-	char* compressed = (char*)malloc(aP_max_packed_size(length));
+	// 2.分配空间
+	char* workmem = (char*)malloc(aP_workmem_size(Length));
+	char* CompreData = (char*)malloc(aP_max_packed_size(Length));
 
-	// 3.计算代码段的位置 用于压缩
-	unsigned char* Text =m_StubInfo.g_Conf->encrypt_rva + (unsigned char*)m_pFile;
-
-	size_t outlength = aPsafe_pack(
-		Text,      //要被压缩的数据
-		compressed,//接收被压缩的数据
-		length,    //被压缩数据的大小
+	// 3.开始压缩
+	size_t OutLength = aPsafe_pack(
+		m_Text,      //要被压缩的数据
+		CompreData,//接收被压缩的数据
+		Length,    //被压缩数据的大小
 		workmem,   //？？0
 		NULL, NULL);
 
-	
-	if (outlength == APLIB_ERROR) {
+	// 判断是否压缩成功
+	if (OutLength == APLIB_ERROR) {
 		printf("压缩数据出错!!\n");
 	}
 	else {
 		// 把压缩后的数据写到原位置覆盖掉
-		memcpy(Text, compressed, outlength);
-		printf("压缩前 %u bytes 压缩后 %u bytes\n", length, outlength);
-		m_StubInfo.g_Conf->compress_size = outlength;
+		memcpy(m_Text, CompreData, OutLength);
+
+		printf("压缩前 %u bytes 压缩后 %u bytes\n", Length, OutLength);
+
+		// 把压缩后的大小保存到dll
+		m_StubInfo.g_Conf->compress_size = OutLength;
+
+		// 开始释放资源
+		free(workmem);
+		free(CompreData);
+
+		// 把区段往前移动
+
+		// 1.计算压缩后文件对齐的大小
+		DWORD Distance=Alignment(OutLength, m_pNT->OptionalHeader.FileAlignment);
+
+		// 1.获取第1个区段首地址
+		PIMAGE_SECTION_HEADER pSection = IMAGE_FIRST_SECTION(m_pNT);
+
+		// 2.获取区段个数
+		int SecNuber=m_pNT->FileHeader.NumberOfSections;
+
+		char* Source = m_pFile + pSection[0].PointerToRawData + Distance;
+		char* Target = NULL;
+
+		for(int i=1;i< SecNuber;i++)
+		{
+			// 1.先获取要移动到哪里 
+			
+			Target = m_pFile + pSection[i].PointerToRawData;
+
+			// 2.计算要移动多大
+			DWORD Target_Size = pSection[i].SizeOfRawData;
+
+			// 4.申请一段堆空间保存要移动的数据
+			char* Temp_Buff = (char*)malloc(sizeof(char) * Target_Size);
+
+			// 5.把数据拷贝到目标地址 
+			memcpy(Temp_Buff, Target, Target_Size);
+			memcpy(Source, Temp_Buff, Target_Size);
+
+			// 6.释放空间
+			free(Temp_Buff);
+
+			// 7.修改文件偏移
+			pSection[i].PointerToRawData = (DWORD)Source;
+
+			// 7.计算下一个要移动到哪里 
+			Source = m_pFile+ pSection[i].PointerToRawData;
+
+		}
+
 	}
-	
+
+
 }
 
 void MySell::SaveFile()

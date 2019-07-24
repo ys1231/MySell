@@ -1,7 +1,5 @@
 #pragma once
 #include<Windows.h>
-#include "../aplib.h"
-#pragma comment(lib,"../aPlib.lib")
 typedef struct _StubConf {
 	DWORD oep;
 	BYTE  encrypt_key;

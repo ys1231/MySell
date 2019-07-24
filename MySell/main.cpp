@@ -21,5 +21,6 @@ int main()
 	Myself.SaveFile();
 
 	system("pause");
+
 	return 0;
 }

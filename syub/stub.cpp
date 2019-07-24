@@ -1,8 +1,10 @@
 #include"stub.h"
-#
+
 #pragma comment(linker, "/merge:.data=.text") 
 #pragma comment(linker, "/merge:.rdata=.text")
 #pragma comment(linker, "/section:.text,RWE")
+#include "../aplib.h"
+#pragma comment(lib,"../aplib.lib")
 
 HMODULE g_hkernel32;
 
@@ -114,41 +116,72 @@ extern "C" {
 	void DeCompress()
 	{
 		DEFAPI("user32.dll", MessageBoxA);
+		DEFAPI("kernel32.dll", ExitProcess);
+		DEFAPI("kernel32.dll", VirtualProtect);
+		DEFAPI("kernel32.dll", VirtualAlloc);
+		DEFAPI("kernel32.dll", VirtualFree);
 
-		unsigned char* compressed = (unsigned char*)(g_conf.encrypt_rva + GetBaseAddress());
-		size_t compressed_size = g_conf.compress_size;
-		size_t orig_size = aPsafe_get_orig_size(compressed);//求得原数据的大小
+		//获取代码首地址
+		 char* Text = ( char*)(g_conf.encrypt_rva + GetBaseAddress());
+		
+		// 修改内存分页属性为可读可写
+		DWORD old;
+		My_VirtualProtect(Text, g_conf.encrypt_size, PAGE_READWRITE, &old);
 
-		/* allocate memory for decompressed data */
-		char* data = (char*)malloc(orig_size);
+		//获取被压缩的大小
+		size_t Text_Size = g_conf.compress_size;
 
-		/* decompress compressed[] to data[] */
+		// 计算原始大小
+		size_t Orig_Size = aPsafe_get_orig_size(Text);//求得原数据的大小
+
+		// 申请内存空间保存解密后的数据
+		//char* data=NULL;
+		LPVOID Data=My_VirtualAlloc(0, Orig_Size, 0x1000|0x2000, 0x4);
+
 		g_conf.compress_size = aPsafe_depack(
-			compressed,     //被压缩的数据
-			compressed_size,//被压缩后的大小
-			data,           //接收解压缩的数据
-			orig_size       //原来的大小
+			Text,     //被压缩的数据
+			Text_Size,//被压缩后的大小
+			Data,     //接收解压缩的数据
+			Orig_Size       //原来的大小
 		);
 
-		/* check decompressed length */
-		if (g_conf.compress_size != orig_size) {
-			My_MessageBoxA(0,"错误","解压缩失败!",0);
-			DEFAPI("kernel32.dll", ExitProcess);
+		// 把解密后的数据拷贝到原地址
+		_asm{
+			pushad
+			mov esi, Data
+			mov edi, Text
+			mov ecx, g_conf.compress_size
+			cld
+			repe movsb
+			popad
+
+		}
+
+		My_VirtualFree(Data, Orig_Size,2);
+		// 恢复内存分页属性
+		My_VirtualProtect(Text, g_conf.encrypt_size, old, &old);
+
+		if (g_conf.compress_size != Orig_Size) {
+			My_MessageBoxA(0,"解压缩失败!","错误",0);
 			My_ExitProcess(0);
+		}else{
+			My_MessageBoxA(0, "解压缩成功!", "成功", 0);
 		}
-		else {
-			//My_MessageBoxA(0,"""%s\nDecompressed %u bytes\n", data, g_conf.compress_size);
-			DEFAPI()
-		}
+		
 	}
 
 	_declspec(dllexport)
 		void _declspec(naked) start() {
 
+		// 初始化两个重要函数的地址
 		getApis();
 
-		Decode();
+		// 解压缩
+		DeCompress();
 
+		// 解密
+		Decode();
+		
 		g_conf.oep+= GetBaseAddress();
 		_asm jmp g_conf.oep;
 	}

@@ -29,7 +29,11 @@ public:
 	//保存NT头
 	PIMAGE_NT_HEADERS m_pNT= nullptr;
 
+	// 包含所有新区段的数据
 	StubInfo m_StubInfo;
+
+	// 保存 压缩段的文件首地址
+	unsigned char* m_Text = NULL;
 
 private:
 
