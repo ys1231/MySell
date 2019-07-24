@@ -1,6 +1,8 @@
 #pragma once
 #include<Windows.h>
 #include "../syub/stub.h"
+#include "../aplib.h"
+#pragma comment(lib,"../aPlib.lib")
 
 typedef struct _StubInfo {
 	PIMAGE_NT_HEADERS Dll_pNT;
@@ -14,7 +16,7 @@ typedef struct _StubInfo {
 class MySell{
 public:
 	MySell(const char* FilePath);
-
+	 
 	~MySell();
 
 	//文件数据缓存
@@ -52,6 +54,12 @@ public:
 
 	// 4.修改其它信息
 	void Alter_Other();
+
+	// 5.对代码段进行加密
+	void Encryption_Text();
+
+	// 6.对代码段进行压缩
+	void Compress_Text();
 
 	// 保存文件
 	void SaveFile();

@@ -1,6 +1,7 @@
 ﻿#include"MySell.h"
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 
 MySell::MySell(const char* FilePath)
 {
@@ -34,7 +35,10 @@ MySell::MySell(const char* FilePath)
 	}
 
 	GetDllInfo();
-	
+
+	// 初始化随机函数
+	srand((unsigned)time(NULL));
+
 	return;
 }
 
@@ -92,7 +96,7 @@ PIMAGE_SECTION_HEADER MySell::Scn_by_name(char* buff, const char* section_name)
 
 void MySell::GetDllInfo()
 {
-
+	// 开始加载ＤＬＬ
 	HMODULE dll = LoadLibraryEx(L"syub.dll", NULL, DONT_RESOLVE_DLL_REFERENCES);
 	if (!dll) {
 		printf("stub.dll加载失败\n");
@@ -125,6 +129,7 @@ void MySell::GetDllInfo()
 
 	// 获取导出变量
 	m_StubInfo.g_Conf = (StubConf*)GetProcAddress(dll, "g_conf");
+	printf("获取壳数据完成!\n");
 }
 
 void MySell::Add_Section()
@@ -167,6 +172,7 @@ void MySell::Add_Section()
 		// 修改原文件保存的大小
 		m_Size = NewSize;
 
+		printf("修改区段数据完成\n");
 		return;
 }
 
@@ -227,12 +233,65 @@ void MySell::Alter_Other()
 	char*pNewSecText= p_Sec->PointerToRawData + m_pFile;
 
 	memcpy(pNewSecText,m_StubInfo.Text_Buff, m_StubInfo.Text_Size);
+	printf("修复壳代码重定位完成\n");
+}
+
+void MySell::Encryption_Text()
+{
+	// 1.先保存密码 代码段起始位置 大小
+	m_StubInfo.g_Conf->encrypt_key = rand() % 255;
+	m_StubInfo.g_Conf->encrypt_rva = Scn_by_name(m_pFile, ".text")->VirtualAddress;
+	m_StubInfo.g_Conf->encrypt_size = Scn_by_name(m_pFile, ".text")->Misc.VirtualSize;
+
+	// 2.在文件偏移的位置开始加密 大小就是实际大小
+	unsigned char* Sec_Text = Scn_by_name(m_pFile, ".text")->PointerToRawData + (unsigned char*)m_pFile;
+
+	// 2.1 开始加密
+	for(int i=0;i< m_StubInfo.g_Conf->encrypt_size;i++)
+	{
+		Sec_Text[i] ^= m_StubInfo.g_Conf->encrypt_key;
+	}
+
+	printf("加密完成!");
+
+}
+
+void MySell::Compress_Text()
+{
+	// 1.先获取区段大小
+	int length = m_StubInfo.g_Conf->encrypt_size;
+
+	// 2.分配内存空间
+	char* workmem = (char*)malloc(aP_workmem_size(length));
+	char* compressed = (char*)malloc(aP_max_packed_size(length));
+
+	// 3.计算代码段的位置 用于压缩
+	unsigned char* Text =m_StubInfo.g_Conf->encrypt_rva + (unsigned char*)m_pFile;
+
+	size_t outlength = aPsafe_pack(
+		Text,      //要被压缩的数据
+		compressed,//接收被压缩的数据
+		length,    //被压缩数据的大小
+		workmem,   //？？0
+		NULL, NULL);
+
+	
+	if (outlength == APLIB_ERROR) {
+		printf("压缩数据出错!!\n");
+	}
+	else {
+		// 把压缩后的数据写到原位置覆盖掉
+		memcpy(Text, compressed, outlength);
+		printf("压缩前 %u bytes 压缩后 %u bytes\n", length, outlength);
+		m_StubInfo.g_Conf->compress_size = outlength;
+	}
+	
 }
 
 void MySell::SaveFile()
 {
 	// 1. 打开一个文件
-	FILE* file = fopen("test_pack.exe", "wb");
+	FILE* file = fopen("E:\\MySell\\Release\\test_pack.exe", "wb");
 	fwrite(m_pFile, 1, m_Size, file);
 	fclose(file);
 
