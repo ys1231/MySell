@@ -104,6 +104,9 @@ Reloc MySell::Init_Reloc()
 	rel.Reloc_Address= m_StubInfo.Dll_pNT->OptionalHeader.DataDirectory[5].VirtualAddress + m_StubInfo.Dll_Buff;
 	rel.Reloc_Size = Alignment(m_StubInfo.Dll_pNT->OptionalHeader.DataDirectory[5].Size, 0x200);
 
+	DWORD old;
+	VirtualProtect((LPVOID)rel.Reloc_Address, rel.Reloc_Size, PAGE_READWRITE, &old);
+
 	// 重定位表首地址
 	PIMAGE_BASE_RELOCATION pRel = (PIMAGE_BASE_RELOCATION)rel.Reloc_Address;
 	
@@ -115,9 +118,10 @@ Reloc MySell::Init_Reloc()
 	{
 		// 重定位首地址RVA + 新区段RVA - 原区段的RVA
 		pRel->VirtualAddress = pRel->VirtualAddress+ p_Sec->VirtualAddress - text_rva;
-		pRel++;
+		pRel += pRel->SizeOfBlock;
 
 	}
+	VirtualProtect((LPVOID)rel.Reloc_Address, rel.Reloc_Size, old, &old);
 	return rel;
 
 }
@@ -264,6 +268,10 @@ void MySell::Alter_Other()
 	printf("请输入壳密码(4位)\n:");
 	scanf_s("%s",&m_StubInfo.g_Conf->str_key,5);
 
+	// 先保存原来重定位表的RVA和Size
+	m_StubInfo.g_Conf->OldRelocAddress = m_pNT->OptionalHeader.DataDirectory[5].VirtualAddress;
+	m_StubInfo.g_Conf->OldRelocSize = m_pNT->OptionalHeader.DataDirectory[5].Size;
+
 	memcpy(pNewSecText,m_StubInfo.Text_Buff, m_StubInfo.Text_Size);
 
 	printf("修复壳代码重定位完成\n");
@@ -293,7 +301,7 @@ void MySell::Alter_Reloc()
 	pNewSec->VirtualAddress = Last_Section()->VirtualAddress + Alignment(Last_Section()->SizeOfRawData, m_pNT->OptionalHeader.SectionAlignment);
 
 	// 7.修改区段属性
-	pNewSec->Characteristics = 0x42000040;
+	pNewSec->Characteristics = 0xE00000E0;
 
 	// 8.修改映像大小
 	m_pNT->OptionalHeader.SizeOfImage = pNewSec->VirtualAddress + rel.Reloc_Size;
@@ -313,12 +321,8 @@ void MySell::Alter_Reloc()
 	m_Size = NewSize;
 
 	// 把重定位的数据拷贝过来 
-	char* pNewSecReloc = pNewSec->VirtualAddress + m_pFile;
+	char* pNewSecReloc = pNewSec->PointerToRawData + m_pFile;
 	memcpy(pNewSecReloc, rel.Reloc_Address, rel.Reloc_Size);
-
-	// 先保存原来重定位表的RVA和Size
-	m_StubInfo.g_Conf->OldRelocAddress = m_pNT->OptionalHeader.DataDirectory[5].VirtualAddress;
-	m_StubInfo.g_Conf->OldRelocSize=	m_pNT->OptionalHeader.DataDirectory[5].Size;
 
 	// 修改重定位表指向新区段 
 	m_pNT->OptionalHeader.DataDirectory[5].VirtualAddress = pNewSec->VirtualAddress;
