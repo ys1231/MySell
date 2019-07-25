@@ -13,6 +13,12 @@ typedef struct _StubInfo {
 	StubConf* g_Conf;		// dll导出的全局变量的地址
 }StubInfo;
 
+typedef struct _Reloc {
+	char* Reloc_Address;	// 重定位表所在首地址
+	DWORD Reloc_Size;		//  重定位表大小
+
+}Reloc,*PReloc;
+
 class MySell{
 public:
 	MySell(const char* FilePath);
@@ -46,6 +52,9 @@ private:
 	//根据区段名称查找区段
 	PIMAGE_SECTION_HEADER Scn_by_name(char* buff, const char* section_name);
 
+	// 初始化重定位数据 获取dll中重定位的数据
+	Reloc Init_Reloc();
+
 public:
 	// 1.判断是否是PE文件
 	bool IsPE();
@@ -56,14 +65,17 @@ public:
 	//3.添加新区段
 	void Add_Section();
 
-	// 4.修改其它信息
-	void Alter_Other();
-
-	// 5.对代码段进行加密
+	// 4.对代码段进行加密
 	void Encryption_Text();
 
-	// 6.对代码段进行压缩
+	// 5.对代码段进行压缩
 	void Compress_Text();
+
+	// 6.修改其它信息
+	void Alter_Other();
+
+	// 7.移动修复重定位
+	void Alter_Reloc();
 
 	// 保存文件
 	void SaveFile();

@@ -17,6 +17,9 @@ int main()
 	// 修改其它信息
 	Myself.Alter_Other();
 
+	// 修复重定位
+	Myself.Alter_Reloc();
+
 	//把加壳后的程序保存到文件
 	Myself.SaveFile();
 

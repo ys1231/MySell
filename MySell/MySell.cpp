@@ -94,6 +94,34 @@ PIMAGE_SECTION_HEADER MySell::Scn_by_name(char* buff, const char* section_name)
 	return NULL;
 }
 
+Reloc MySell::Init_Reloc()
+{
+	// 1.获取新区段首地址
+	PIMAGE_SECTION_HEADER p_Sec = Last_Section() + 1;
+
+	// 获取 dll重定位表的VA 地址 和大小
+	Reloc rel;
+	rel.Reloc_Address= m_StubInfo.Dll_pNT->OptionalHeader.DataDirectory[5].VirtualAddress + m_StubInfo.Dll_Buff;
+	rel.Reloc_Size = Alignment(m_StubInfo.Dll_pNT->OptionalHeader.DataDirectory[5].Size, 0x200);
+
+	// 重定位表首地址
+	PIMAGE_BASE_RELOCATION pRel = (PIMAGE_BASE_RELOCATION)rel.Reloc_Address;
+	
+	// text段的
+	DWORD text_rva = Scn_by_name(m_StubInfo.Dll_Buff, ".text")->VirtualAddress;
+
+	// 修复重定位数据
+	while (pRel->SizeOfBlock)
+	{
+		// 重定位首地址RVA + 新区段RVA - 原区段的RVA
+		pRel->VirtualAddress = pRel->VirtualAddress+ p_Sec->VirtualAddress - text_rva;
+		pRel++;
+
+	}
+	return rel;
+
+}
+
 void MySell::GetDllInfo()
 {
 	// 开始加载ＤＬＬ
@@ -227,14 +255,78 @@ void MySell::Alter_Other()
 	}
 
 	// 4.去出支持随机基址的标志位
-	m_pNT->OptionalHeader.DllCharacteristics &= ~(0x40);
+	//m_pNT->OptionalHeader.DllCharacteristics &= ~(0x40);
 
 	// 5.将stub的代码段拷贝到新区段
 	char*pNewSecText= p_Sec->PointerToRawData + m_pFile;
 
+	// 设置程序密码
+	printf("请输入壳密码(4位)\n:");
+	scanf_s("%s",&m_StubInfo.g_Conf->str_key,5);
+
 	memcpy(pNewSecText,m_StubInfo.Text_Buff, m_StubInfo.Text_Size);
 
 	printf("修复壳代码重定位完成\n");
+}
+
+void MySell::Alter_Reloc()
+{
+	// 开始修复重定位
+	Reloc rel= Init_Reloc();
+	// 1.修改区段个数
+	m_pNT->FileHeader.NumberOfSections++;
+
+	// 2.修改区段名称
+	PIMAGE_SECTION_HEADER pNewSec = Last_Section() + 1;
+	memcpy(pNewSec->Name, ".Rreloc", 8);
+
+	// 3.修改区段实际大小				//读取dll的获取的reloc段大小
+	pNewSec->Misc.VirtualSize =rel.Reloc_Size;
+
+	// 4.修改文件对齐大小
+	pNewSec->SizeOfRawData = Alignment(rel.Reloc_Size, m_pNT->OptionalHeader.FileAlignment);
+
+	// 5.修改文件偏移
+	pNewSec->PointerToRawData = Alignment(m_Size, m_pNT->OptionalHeader.FileAlignment);
+
+	// 6.修改内存偏移
+	pNewSec->VirtualAddress = Last_Section()->VirtualAddress + Alignment(Last_Section()->SizeOfRawData, m_pNT->OptionalHeader.SectionAlignment);
+
+	// 7.修改区段属性
+	pNewSec->Characteristics = 0x42000040;
+
+	// 8.修改映像大小
+	m_pNT->OptionalHeader.SizeOfImage = pNewSec->VirtualAddress + rel.Reloc_Size;
+
+	// 9,修改文件数据大小 
+
+	// 1.先获取修改后的文件大小
+	int NewSize = pNewSec->PointerToRawData + pNewSec->SizeOfRawData;
+
+	// 2.扩大对空间 保证有那么大的文件
+	m_pFile = (char*)realloc(m_pFile, NewSize);
+	// 获取NT头
+	m_pDos = (PIMAGE_DOS_HEADER)m_pFile;
+	m_pNT = (PIMAGE_NT_HEADERS)(m_pDos->e_lfanew + m_pFile);
+
+	// 修改原文件保存的大小
+	m_Size = NewSize;
+
+	// 把重定位的数据拷贝过来 
+	char* pNewSecReloc = pNewSec->VirtualAddress + m_pFile;
+	memcpy(pNewSecReloc, rel.Reloc_Address, rel.Reloc_Size);
+
+	// 先保存原来重定位表的RVA和Size
+	m_StubInfo.g_Conf->OldRelocAddress = m_pNT->OptionalHeader.DataDirectory[5].VirtualAddress;
+	m_StubInfo.g_Conf->OldRelocSize=	m_pNT->OptionalHeader.DataDirectory[5].Size;
+
+	// 修改重定位表指向新区段 
+	m_pNT->OptionalHeader.DataDirectory[5].VirtualAddress = pNewSec->VirtualAddress;
+	m_pNT->OptionalHeader.DataDirectory[5].Size = rel.Reloc_Size;
+
+	printf("修复重定位指向完成\n");
+	return;
+
 }
 
 void MySell::Encryption_Text()

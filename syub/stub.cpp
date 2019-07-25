@@ -217,7 +217,9 @@ extern "C" {
 				
 				// 保存密码的
 				char buff[5]={};
-				char str[5] = { '1','5','p','b','\0' };
+				//char str[5] = { '1','5','p','b','\0' };
+				//char str[5] = "15pb";
+
 				DWORD flag = 0;
 
 				// 从空间获取密码
@@ -228,7 +230,7 @@ extern "C" {
 				{
 					pushad
 					mov ecx, 0x4
-					lea edi, str
+					lea edi, g_conf.str_key
 					lea esi, buff
 					cld
 					repe cmpsb
@@ -330,16 +332,40 @@ extern "C" {
 		}
 	}
 
+	// 修复重定位函数
+	void Alter_Reloc() {
+
+
+
+
+	}
+
 
 	_declspec(dllexport)
 		void _declspec(naked) start() {
 
+		// 花指令
+		_asm
+		{
+			jmp l2
+			_EMIT 0x1
+			_EMIT 0x2
+			_EMIT 0x3
+			_EMIT 0x4
+			l2:
+			mov eax, 0x11111111
+		}
+
 		// 初始化两个重要函数的地址
 		getApis();
-
+		
+		// 密码验证
 		UserCheck();
 		// 解压缩
 		DeCompress();
+
+		// 修复重定位
+		
 
 		// 解密
 		Decode();
