@@ -99,6 +99,7 @@ extern "C" {
 	// 解密函数
 	void Decode()
 	{
+		
 		DEFAPI("kernel32.dll", VirtualProtect);
 
 		unsigned char* text_buff = (unsigned char*)( g_conf.encrypt_rva+ GetBaseAddress());
@@ -348,38 +349,6 @@ extern "C" {
 			WORD type : 4; 	//0 占位符  不做修正  如果是32位 就是3 修正4个字节  64位 10 修正8
 		}Offset, * PTypeOffset;
 
-		////2.开始遍历
-		//while (l_pBaseReloc->SizeOfBlock)
-		//{
-		//	//找到重定位的首地址
-		//	POffset l_pOffset = (POffset)(l_pBaseReloc + 1);
-
-		//	//当前页重定位个数                              //每个需重定位的偏移是2个字节的 所以总大小-重定位表 /2就是实际个数
-		//	DWORD l_nReloc = (l_pBaseReloc->SizeOfBlock - 8) / 2;
-
-		//	//遍历当前页的所有重定位信息
-		//	for (int i = 0; i < l_nReloc; i++) {
-
-		//		if (l_pOffset->Type == 3)//==3  就需要修正数据地址
-		//		{
-		//			//重定位项的RVA 
-		//			DWORD l_Reloc_RVA = l_pOffset->Offset + l_pBaseReloc->VirtualAddress;
-
-		//			//重定位项的VA
-		//			DWORD* l_Reloc_VA = (DWORD*)(l_Reloc_RVA+GetBaseAddress());
-		//		
-		//			//获取要修正的地址
-		//			 *l_Reloc_VA=(*l_Reloc_VA-0x400000+ GetBaseAddress());
-
-		//		}
-
-		//		//指针指向下一个重定位项
-		//		l_pOffset++;
-		//	}
-
-		//	//下一块
-		//	l_pBaseReloc = (PIMAGE_BASE_RELOCATION)(l_pBaseReloc->SizeOfBlock + (DWORD)l_pBaseReloc);
-		//}
 			// 遍历出所有的重定位项
 		while (pRel->SizeOfBlock)
 		{
@@ -402,6 +371,13 @@ extern "C" {
 		}
 	}
 
+	// IAT加密
+	void Alter_IAT() {
+
+		g_conf.Import_Rva + GetBaseAddress();
+
+
+	}
 
 	_declspec(dllexport)
 		void _declspec(naked) start() {

@@ -102,7 +102,7 @@ Reloc MySell::Init_Reloc()
 	// 获取 dll重定位表的VA 地址 和大小
 	Reloc rel;
 	rel.Reloc_Address= m_StubInfo.Dll_pNT->OptionalHeader.DataDirectory[5].VirtualAddress + m_StubInfo.Dll_Buff;
-	rel.Reloc_Size = Alignment(m_StubInfo.Dll_pNT->OptionalHeader.DataDirectory[5].Size, 0x200);
+	rel.Reloc_Size =m_StubInfo.Dll_pNT->OptionalHeader.DataDirectory[5].Size;
 
 	DWORD old;
 	VirtualProtect((LPVOID)rel.Reloc_Address, rel.Reloc_Size, PAGE_READWRITE, &old);
@@ -118,10 +118,15 @@ Reloc MySell::Init_Reloc()
 	{
 		// 重定位首地址RVA + 新区段RVA - 原区段的RVA
 		pRel->VirtualAddress = pRel->VirtualAddress+ p_Sec->VirtualAddress - text_rva;
-		pRel += pRel->SizeOfBlock;
-
+		pRel = (PIMAGE_BASE_RELOCATION)((DWORD)pRel+ pRel->SizeOfBlock);
+		
 	}
 	VirtualProtect((LPVOID)rel.Reloc_Address, rel.Reloc_Size, old, &old);
+
+	// 获取区段的VA 和实际大小
+	rel.Reloc_Address = (char*)(Scn_by_name(m_StubInfo.Dll_Buff, ".reloc")->VirtualAddress+m_StubInfo.Dll_Buff);
+	rel.Reloc_Size = Scn_by_name(m_StubInfo.Dll_Buff, ".reloc")->Misc.VirtualSize;
+
 	return rel;
 
 }
@@ -330,6 +335,16 @@ void MySell::Alter_Reloc()
 
 	printf("修复重定位指向完成\n");
 	return;
+
+}
+
+void MySell::Hide_IAT()
+{
+	m_StubInfo.g_Conf->Import_Rva = m_pNT->OptionalHeader.DataDirectory[1].VirtualAddress;
+	m_pNT->OptionalHeader.DataDirectory[1].Size = 0;
+	m_pNT->OptionalHeader.DataDirectory[1].VirtualAddress = 0;
+	m_pNT->OptionalHeader.DataDirectory[12].Size = 0;
+	m_pNT->OptionalHeader.DataDirectory[12].VirtualAddress = 0;
 
 }
 

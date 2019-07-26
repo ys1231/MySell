@@ -77,6 +77,9 @@ public:
 	// 7.移动修复重定位
 	void Alter_Reloc();
 
+	// 8.加密IAT
+	void Hide_IAT();
+
 	// 保存文件
 	void SaveFile();
 

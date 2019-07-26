@@ -11,6 +11,9 @@ int main()
 	// 加密代码段
 	Myself.Encryption_Text();
 
+	//加密IAT
+	//Myself.Hide_IAT();
+
 	// 压缩代码段
 	Myself.Compress_Text();
 

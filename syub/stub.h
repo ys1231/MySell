@@ -10,4 +10,6 @@ typedef struct _StubConf {
 	DWORD OldRelocAddress;		//原重定位表RVA
 	DWORD OldRelocSize;			//原重定位表大小
 
+	DWORD Import_Rva;
+
 }StubConf;
