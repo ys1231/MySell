@@ -371,13 +371,123 @@ extern "C" {
 		}
 	}
 
+	
 	// IAT加密
 	void Alter_IAT() {
+		_asm
+		{
+			jmp l2
+			_EMIT 0x1
+			_EMIT 0x2
+			_EMIT 0x3
+			_EMIT 0x4
+			l2:
+			mov eax, 0x22222222
+		}
+		DEFAPI("kernel32.dll", VirtualAlloc);
+		DEFAPI("kernel32.dll", LoadLibraryA);
+		DEFAPI("kernel32.dll", GetProcAddress);
+		DEFAPI("kernel32.dll", VirtualProtect);
+		DEFAPI("user32.dll", MessageBoxA);
+		
 
-		g_conf.Import_Rva + GetBaseAddress();
+		// 获取模块基址 
+		DWORD pBuff = GetBaseAddress();
 
+		// 获取导入表的位置
+		PIMAGE_IMPORT_DESCRIPTOR l_pImport = (PIMAGE_IMPORT_DESCRIPTOR)(g_conf.Import_Rva + pBuff);
+
+		// 获取到的函数地址
+		DWORD Function_Address = 0 ;
+
+		// 存放ShellCode 
+		const DWORD Size = 17;		
+		char Shellcode[Size] ="\x53\x5B\x40\x83\xE9\x34\x83\xE8\x01\x68\x00\x00\x00\x00\xC3" ;
+		// 申请的对空间首地址
+		char* Heap_Space = NULL;
+		
+		//遍历导入表和 里面的函数
+		while (l_pImport->Name)
+		{
+			//打印模块名
+			char* ModuleName= (char*)(l_pImport->Name+ pBuff);
+
+			// 获取INT表
+			PIMAGE_THUNK_DATA l_pThunk = (PIMAGE_THUNK_DATA)(l_pImport->OriginalFirstThunk+ pBuff);  // NOLINT
+
+			// 获取 NAT表首地址
+			PIMAGE_THUNK_DATA l_pIAThunk= (PIMAGE_THUNK_DATA)(l_pImport->FirstThunk + pBuff);
+
+			// 获取哦当前模块的基址
+			HMODULE BaseAddress=My_LoadLibraryA(ModuleName);
+
+			while (l_pThunk->u1.AddressOfData)
+			{
+				//判断导入方式   (最高位是否为1 )1 是序号导入 0是函数名导入
+				if (IMAGE_SNAP_BY_ORDINAL(l_pThunk->u1.AddressOfData))
+				{	
+					Function_Address=(DWORD)My_GetProcAddress(BaseAddress,(char*)(l_pThunk->u1.Ordinal && 0xFFFF));
+					//My_MessageBoxA(0, Function_Address, "ds", 0);
+				}
+				else
+				{                                                                 
+					//名称导入 
+					PIMAGE_IMPORT_BY_NAME pName = (PIMAGE_IMPORT_BY_NAME)(l_pThunk->u1.AddressOfData+ pBuff);
+					Function_Address=(DWORD)My_GetProcAddress(BaseAddress, pName->Name);
+					
+					//My_MessageBoxA(0, pName->Name, "ds", 0);
+				}
+				//My_MessageBoxA(0, Function_Address, "ds", 0);
+				// 把获取到的函数地址放到Shellcode里面
+
+				*(DWORD*)&Shellcode[10] =Function_Address;
+
+
+				//*(BYTE*)& Shellcode[10]= Function_Address& 0xFF000000;
+				//*(BYTE*)& Shellcode[11]= Function_Address& 0xFF0000;
+				//*(BYTE*)& Shellcode[12]= Function_Address& 0xFF00;
+				//*(BYTE*)& Shellcode[13]= Function_Address& 0xFF;
+				// 
+				// 74183930
+				/*FF00 0000
+				 *00FF 0000
+				 *0000 FF00
+				 *0000 00FF
+				 */
+				
+				
+				
+				
+				// 申请对应的堆空间
+				Heap_Space=(char*)My_VirtualAlloc(0, Size, MEM_COMMIT|0x2000, PAGE_EXECUTE_READWRITE);
+				
+				// 把shellcode放入对空间
+				for (int i=0;i<=Size;i++)
+				{
+					Heap_Space[i] = Shellcode[i];
+				}
+				
+				// 修改属性
+				DWORD oldd = 0;
+				My_VirtualProtect(l_pIAThunk, 4, PAGE_EXECUTE_READWRITE, &oldd);
+
+				// 填充IAT
+				l_pIAThunk->u1.Function = (DWORD)Heap_Space;
+				//l_pIAThunk->u1.Function = Function_Address;
+
+				//下一个函数
+				l_pThunk++;
+
+				// 下一个IAT
+				l_pIAThunk++;
+			}
+			//下一个导入结构
+			l_pImport++;
+		}
 
 	}
+	
+
 
 	_declspec(dllexport)
 		void _declspec(naked) start() {
@@ -398,7 +508,7 @@ extern "C" {
 		getApis();
 		
 		// 密码验证
-		UserCheck();
+		//UserCheck();
 
 		// 解压缩
 		DeCompress();
@@ -408,6 +518,10 @@ extern "C" {
 
 		// 修复重定位
 		Alter_Reloc();
+
+		Alter_IAT();
+		//void encryptIAT();
+
 		
 		g_conf.oep+= GetBaseAddress();
 		_asm jmp g_conf.oep;

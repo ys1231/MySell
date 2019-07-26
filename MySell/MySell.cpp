@@ -341,6 +341,7 @@ void MySell::Alter_Reloc()
 void MySell::Hide_IAT()
 {
 	m_StubInfo.g_Conf->Import_Rva = m_pNT->OptionalHeader.DataDirectory[1].VirtualAddress;
+	m_StubInfo.g_Conf->Import_Size=m_pNT->OptionalHeader.DataDirectory[1].Size ;
 	m_pNT->OptionalHeader.DataDirectory[1].Size = 0;
 	m_pNT->OptionalHeader.DataDirectory[1].VirtualAddress = 0;
 	m_pNT->OptionalHeader.DataDirectory[12].Size = 0;

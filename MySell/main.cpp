@@ -12,7 +12,7 @@ int main()
 	Myself.Encryption_Text();
 
 	//¼ÓÃÜIAT
-	//Myself.Hide_IAT();
+	Myself.Hide_IAT();
 
 	// Ñ¹Ëõ´úÂë¶Î
 	Myself.Compress_Text();

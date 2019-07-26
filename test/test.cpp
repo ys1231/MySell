@@ -7,8 +7,8 @@ int g_aaa;
 
 int main()
 {
-	printf("请输入一个数\n");
-	scanf("%d", &g_aaa);
-	printf("%d",g_aaa);
+	for(int i=0;i<100;i++)
+	printf("HelloWorld\n");
+	
 	system("pause");
 }
